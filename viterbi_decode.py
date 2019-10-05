@@ -1,6 +1,7 @@
 import numpy as np
 
 """
+
         modified from:https://github.com/ddbourgin/numpy-ml/blob/master/numpy_ml/hmm/hmm.py
         
         A Viterbi_decode algorithm implement by numpy
