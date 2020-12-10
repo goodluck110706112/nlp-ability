@@ -43,37 +43,40 @@ import numpy as np
 
 
 
-def viterbi_decode(A,B,pi,N,O,eps):
-    
+def viterbi_decode(transition_matrix, emission_matrix, pi, N, observed_sequence, eps):
+
     eps = eps
 
-    if O.ndim == 1:
-        O = O.reshape(1, -1)
+    if observed_sequence.ndim == 1:
+        observed_sequence = observed_sequence.reshape(1, -1)
 
-    # number of observations in each sequence
-    T = O.shape[1]
+    # number of observations in each sequence 
+    T = observed_sequence.shape[1]
 
     # number of training sequences
-    I = O.shape[0]
+    I = observed_sequence.shape[0]
     if I != 1:
-        raise ValueError("Can only decode a single sequence (O.shape[0] must be 1)")
+        raise ValueError(
+            "Can only decode a single sequence (O.shape[0] must be 1)")
 
     # initialize the viterbi and back_pointer matrices
     viterbi = np.zeros((N, T))
     back_pointer = np.zeros((N, T)).astype(int)
 
-    ot = O[0, 0]
+    ot = observed_sequence[0, 0]
     for s in range(N):
         back_pointer[s, 0] = 0
-        viterbi[s, 0] = np.log(pi[s] + eps) + np.log(B[s, ot] + eps)
+        viterbi[s, 0] = np.log(pi[s] + eps) + np.log(emission_matrix[s, ot] + eps)
 
+    # T表示观测序列长度，N表示隐状态的数量，或者说搜索空间的宽度
+    # 时间复杂度为O(T*N*N)
     for t in range(1, T):
-        ot = O[0, t]
+        ot = observed_sequence[0, t]
         for s in range(N):
             seq_probs = [
                 viterbi[s_, t - 1]
-                + np.log(A[s_, s] + eps)
-                + np.log(B[s, ot] + eps)
+                + np.log(transition_matrix[s_, s] + eps)
+                + np.log(emission_matrix[s, ot] + eps)
                 for s_ in range(N)
             ]
 
