@@ -2,21 +2,21 @@
 # https://pythonalgos.com/dijkstras-algorithm-in-5-steps-with-python/ 这个时间复杂度很好
 import heapq
 
-def dijkstra(graph, root):
+def dijkstra(matrix, root):
     Inf = 1e8
-    n = len(graph)
+    n = len(matrix)
     dist = [Inf for _ in range(n)]
     dist[root] = 0  # 到自己的距离为0
     visited = [False for _ in range(n)]
     queue = [(0, root)]  # (distance to target, target)
     while len(queue) > 0:
-        _, added_target = heapq.heappop(queue)  # added_target是已经遍历过的target
+        _, added_target = heapq.heappop(queue)  # added_target是最短距离已知的target
         if visited[added_target]:
             continue
         # set the node to visited
         visited[added_target] = True
         # check the distance and node and distance
-        for new_target, distance in enumerate(graph[added_target]):
+        for new_target, distance in enumerate(matrix[added_target]):
             # if the current node's distance + distance to the node we're visiting
             # is less than the distance of the node we're visiting on file
             # replace that distance and push the node we're visiting into the priority queue
