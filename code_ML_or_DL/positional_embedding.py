@@ -14,7 +14,7 @@ class PositionalEmbedding(nn.Module):
         super().__init__()
         if learned:  # used in BERT
             pe = nn.Parameter(torch.randn(max_len, d_model))
-            pe = pe.unsqueeze(0)  # （1,max_len, d_model）
+            pe = pe.unsqueeze(0)  # （1,max_len, d_model）,这样的shape可以方便直接在forward的时候和x相加
             self.pe = pe
         else:  # used in transformer
             pe = torch.zeros(max_len, d_model)
@@ -24,9 +24,7 @@ class PositionalEmbedding(nn.Module):
             )
             pe[:, 0::2] = torch.sin(position * div_term)
             pe[:, 1::2] = torch.cos(position * div_term)
-            pe = pe.unsqueeze(
-                0
-            )  # (1, max_len, d_model)，这样shape可以方便直接在forward的时候和x相加
+            pe = pe.unsqueeze(0)  # (1, max_len, d_model)，这样的shape可以方便直接在forward的时候和x相加
             self.register_buffer("pe", pe)
             # 用register_buffer的好处是？答：定义一个不需要参与反向传播的常量，比如这里的pe，这样不会被视作模型的参数
 
