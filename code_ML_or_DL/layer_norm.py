@@ -1,6 +1,8 @@
 import torch
 from torch import nn, Tensor
+
 # 实现layer normalization，来自:https://zhuanlan.zhihu.com/p/398039366
+
 
 class LayerNorm(nn.Module):
     def __init__(self, num_features, eps=1e-5):
@@ -10,17 +12,17 @@ class LayerNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x: Tensor):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        x = (x - mean) / (std + self.eps)
+        # 这里的实现，和隔壁batch normalization的差不多，就是dim换一下
+        mean = x.mean(dim=-1, keepdim=True)  # 如果是bn，那么这里dim都是0
+        var = x.var(dim=-1, keepdim=True)
+        x = (x - mean) / torch.sqrt(var + self.eps)
         return self.gamma * x + self.beta
-
 
 
 if __name__ == "__main__":
     embed_size = 512
     ln_1 = nn.LayerNorm(embed_size)  # 官方的
-    ln_2 = LayerNorm(embed_size)    # 自己实现的
+    ln_2 = LayerNorm(embed_size)  # 自己实现的
     print(ln_1.weight.shape)
     print(ln_2.gamma.shape)
     bsz, seq_len = 2, 5

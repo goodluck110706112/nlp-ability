@@ -26,7 +26,7 @@ class BatchNorm(nn.Module):
         self.moving_mean = torch.zeros(shape)
         self.moving_var = torch.ones(shape)
         # 定义eps 和 momentum
-        self.eps = 1e-5   # 开源实现，一般喜欢eps为1e-5
+        self.eps = 1e-5  # 开源实现，一般喜欢eps为1e-5或者1e-6
         self.momentum = 0.9
 
     def batch_norm(self, x: Tensor):
@@ -38,18 +38,22 @@ class BatchNorm(nn.Module):
             assert len(x.shape) in (2, 4)
             if len(x.shape) == 2:
                 # 使用全连接层的情况，计算特征维上的均值和方差
-                mean = x.mean(dim=0)
-                var = ((x - mean) ** 2).mean(dim=0)
+                mean = x.mean(dim=0, keepdim=True)  # 针对全连接层的情况，如果是layer norm，这里dim都是-1
+                var = x.var(dim=0, keepdim=True)
             else:
-                # 使用二维卷积层的情况，计算通道维上（axis=1）的均值和方差。
+                # 使用二维卷积层的情况，计算通道维上（axis=1）的均值和方差，也就是计算shape为（N,H,W）的均值和方差
                 # 这里我们需要保持x的形状以便后面可以做广播运算
                 mean = x.mean(dim=(0, 2, 3), keepdim=True)
-                var = ((x - mean) ** 2).mean(dim=(0, 2, 3), keepdim=True)
+                var = x.var(dim=(0, 2, 3), keepdim=True)
             # 训练模式下，用当前batch的均值和方差做标准化
             x_hat = (x - mean) / torch.sqrt(var + self.eps)
             # 更新移动平均的均值和方差，也就是更新全局的均值和方差
-            self.moving_mean = self.momentum * self.moving_mean + (1.0 - self.momentum) * mean
-            self.moving_var = self.momentum * self.moving_var + (1.0 - self.momentum) * var
+            self.moving_mean = (
+                self.momentum * self.moving_mean + (1.0 - self.momentum) * mean
+            )
+            self.moving_var = (
+                self.momentum * self.moving_var + (1.0 - self.momentum) * var
+            )
         y = self.gamma * x_hat + self.beta  # rescale and shift
         return y
 
@@ -64,8 +68,15 @@ class BatchNorm(nn.Module):
 
 
 if __name__ == "__main__":
-    bn = BatchNorm(512, 4)
-    bsz = 4
-    C, H, W = 512, 7, 7
-    x = torch.Tensor(bsz, C, H, W)  # (N,C,H,W)
-    print(bn(x).shape)
+    # 自己的batch normalization
+    bn = BatchNorm(3, 4)
+    bsz = 2
+    C, H, W = 3, 2, 2
+    x = torch.randn(bsz, C, H, W)  # (N,C,H,W)
+    x_cp = x.clone()
+    print(bn(x))
+    
+    print('----'*20)
+    # 官方的batch normalization
+    bn_2 = nn.BatchNorm2d(3)
+    print(bn_2(x_cp))
