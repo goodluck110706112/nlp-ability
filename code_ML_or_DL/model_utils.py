@@ -1,3 +1,4 @@
+from celery import xmap
 import torch
 from torch import nn, Tensor
 
@@ -29,11 +30,11 @@ def one_hot(x: Tensor, n_class: int, dtype=torch.float32) -> Tensor:
 
 
 def dropout(x: Tensor, dropout_prob: float = 0.5) -> Tensor:
+    if dropout_prob == 0:  # 特殊情况：0的话直接返回x
+        return x
     x = x.float()
     assert 0 <= dropout_prob <= 1
     keep_p = 1 - dropout_prob
-    if keep_p == 0:
-        return torch.zeros_like(x)
     # 注意，#1和#2是等价的
     # mask = (torch.rand(x.shape) < keep_p).float()  #1
     mask = (torch.rand_like(x) < keep_p).float()     #2

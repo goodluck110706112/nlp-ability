@@ -61,5 +61,5 @@ class MultiHeadAttention(nn.Module):
             .contiguous()  # contiguous常加在view()之前
             .view(scores.shape[0], -1, self.embed_size)
         )  # (bsz, seq_len, embed_size)
-        out = self.out_proj(scores)
+        out = self.out_proj(scores)  # (bsz, seq_len, embed_size)
         return out
