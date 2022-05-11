@@ -20,13 +20,14 @@ def clip_loss(similarity: Tensor) -> Tensor:
 
 
 class CLIPModel(nn.Module):
-    def __init__(self, text_encoder, image_encoder, init_temperature):
+    def __init__(self, text_encoder, image_encoder, init_temperature=0.07):
         super().__init__()
         self.text_encoder = text_encoder
         self.image_encoder = image_encoder
         self.temperature = nn.Parameter(
             nn.Parameter(torch.ones([]) * init_temperature)
-        )  # 就是对比学习的温度，是个可学习的标量，比如0.07
+        )  # 这里就是对比学习的温度，是个可学习的标量，一般初始化为0.07
+        # 注意，如果这里self.temperature为t，在CLIP中使用的是np.log(1/t)，初始值是2.6592，估计是为了让t更新的慢一些，让训练更稳定
 
     def forward(self, txts: Tensor, images: Tensor):
         text_embeds = self.text_encoder(txts)  # (bsz, txt_emb_dim)
@@ -37,9 +38,8 @@ class CLIPModel(nn.Module):
         text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
 
         # cosine similarity as logits
-        logit_scale = self.temperature.exp()
         logits_text = (
-            torch.matmul(text_embeds, image_embeds.t()) * logit_scale
+            torch.matmul(text_embeds, image_embeds.t()) / self.temperature
         )  # （bsz, bsz）
 
         loss = clip_loss(logits_text)
