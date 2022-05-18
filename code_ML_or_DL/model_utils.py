@@ -37,17 +37,34 @@ def dropout(x: Tensor, dropout_prob: float = 0.5) -> Tensor:
     keep_p = 1 - dropout_prob
     # 注意，#1和#2是等价的
     # mask = (torch.rand(x.shape) < keep_p).float()  #1
-    mask = (torch.rand_like(x) < keep_p).float()     #2
+    mask = (torch.rand_like(x) < keep_p).float()  # 2
     # torch.rand_like()和torch.randn_like()的区别,前者是(0,1)的均匀分布，后者是标准正态分布
     # torch.rand_like(x)返回的是和x的shape一样的，服从(0,1)的均匀分布的tensor
     # torch.randn_like(x)返回的是和x的shape一样的，服从标准正态的tensor
-    return mask * x / keep_p   # 这里除以1-p，是为了在训练和测试的时候，这一层的输出有相同的期望
+    return mask * x / keep_p  # 这里除以1-p，是为了在训练和测试的时候，这一层的输出有相同的期望
+
+
+def softmax(x: torch.Tensor) -> torch.Tensor:
+    # 从0实现softmax，一维的向量，二维的都可以处理，参考了logsumexp trick，先减去最后那个维度(dim=-1)的最大值，防止溢出
+    x_max = torch.max(
+        x, dim=-1, keepdim=True  # 为了适配后面的广播操作，需要keepdim=True
+    ).values  # 这种torch.max返回的是namedtuple，有两个key，分别是values, indices
+    x -= x_max
+    x = torch.exp(x)  # 也可以写x = x.exp()
+    return x / torch.sum(x, dim=-1, keepdim=True)  # 为了适配后面的广播操作，需要keepdim=True
 
 
 if __name__ == "__main__":
-    x = torch.randn(4, 5)
-    drop_prob = 0.5
-    x_drop = dropout(x, drop_prob)
-    print(x)
-    print(x_drop)
-    
+    # dropout
+    # x = torch.randn(4, 5)
+    # drop_prob = 0.5
+    # x_drop = dropout(x, drop_prob)
+    # print(x)
+    # print(x_drop)
+
+    # softmax
+    x = torch.tensor([[1, 6, 24, 12, 4], [5, -8, 1, 2, 3]]).float()
+    # x = torch.tensor([1, 6, 2, 12, 4, 52, 5]).float()
+
+    print(torch.softmax(x, dim=-1))
+    print(softmax(x))
