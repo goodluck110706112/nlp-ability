@@ -9,7 +9,7 @@ import torch.nn.functional as F  # 大家常用的F， 比如F.softmax(attention
 from torch.optim import Adam  # adam
 from torch.utils.data import Dataset  # DataSet
 from torch.optim.lr_scheduler import CosineAnnealingLR  # 余弦退火学习率（CosineAnnealingLR）
-
+import snoop
 
 # 下面是实现一些简短的代码，比如one_hot，还有dropout,
 def one_hot(x: Tensor, n_class: int, dtype=torch.float32) -> Tensor:
@@ -54,7 +54,22 @@ def softmax(x: torch.Tensor) -> torch.Tensor:
     return x / torch.sum(x, dim=-1, keepdim=True)  # 为了适配后面的广播操作，需要keepdim=True
 
 
+def attention_mask(
+    length,
+):  # transformer-decoder的mask，用来防止信息泄露，做文本生成用的到，这个mask也叫做decoder-mask
+    # attention_mask(4)，输出：
+    # tensor([[0., -inf, -inf, -inf],
+    #         [0., 0., -inf, -inf],
+    #         [0., 0., 0., -inf],
+    #         [0., 0., 0., 0.]])
+    mask = (torch.zeros([length, length])).float().fill_(float("-inf"))
+    mask = torch.triu(input=mask, diagonal=1)  # 我们希望对角线及对角线以下（包括对角线）的部分全部置0，所以diagonal = 1
+    return mask
+
+
 if __name__ == "__main__":
+    # demo：
+
     # dropout
     # x = torch.randn(4, 5)
     # drop_prob = 0.5
@@ -66,5 +81,5 @@ if __name__ == "__main__":
     x = torch.tensor([[1, 6, 24, 12, 4], [5, -8, 1, 2, 3]]).float()
     # x = torch.tensor([1, 6, 2, 12, 4, 52, 5]).float()
 
-    print(torch.softmax(x, dim=-1))
-    print(softmax(x))
+    # attention_mask
+    print(attention_mask(length=4))
