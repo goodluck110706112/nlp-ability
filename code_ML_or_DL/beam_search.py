@@ -6,90 +6,65 @@ from torch import nn
 
 
 def beam_search(
-    decoder: nn.Module,
-    hidden: torch.Tensor,
+    decoder: nn.Module,     # decoder就是我们的模型，比如lstm，
+    hidden: torch.Tensor,   # hidden.shape = (beam_size, hidden_size)
     beam_size: int = 3,
     bos_token_idx: int = 0,
     eos_token_idx: int = 2,
     max_length: int = 20,
     vocab_size: int = 600,
 ):
-    # decoder就是我们的模型，比如lstm，
-    # hidden.shape = (beam_size, hidden_size)
-
-    prev_words = torch.full(
-        (beam_size, 1), bos_token_idx, dtype=torch.long
-    )  # (beam_size, 1)
+    prev_words = torch.full((beam_size, 1), bos_token_idx, dtype=torch.long)  # (beam_size, 1)
     # 此时输出序列中只有bos token
     seqs = prev_words  # (beam_size, 1)
     # 初始化scores向量为0
-    lprob_sum: torch.Tensor = torch.zeros(
-        beam_size
-    )  # 某个生成句子，累积的log分数，shape=（beam_size,）
+    lprob_total: torch.Tensor = torch.zeros(beam_size)  # 某个生成句子，累积的log分数，shape=（beam_size,）
     complete_seqs = []
     complete_seqs_scores = []
     step = 1
     while True:
-        logits, hidden = decoder(
-            prev_words, hidden
-        )  # logits: (beam_size, seq_len, vocab_size)，其实logits就是logits
-        logits = torch.log_softmax(logits, dim=-1)  # 我们的概率采用的是log形式
-        next_token_logits: torch.Tensor = logits[:, -1, :]  # 取最后一个时刻的输出，shape=(beam_size, vocab_size)
-        # 累加lprob_sum的时候，注意lprob_sum此时shape = （beam_size,），shape转成（beam_size, 1）才可以与next_token_logits相加
-        lprob_sum = next_token_logits + lprob_sum.unsqueeze(
-            dim=-1
-        )  # 累加lprob_sum，shape=(beam_size, vocab_size)
+        logits, hidden = decoder(prev_words, hidden)  # logits: (beam_size, seq_len, vocab_size)
+        logits = torch.log_softmax(logits, dim=-1)  # 概率采用的是log形式
+        next_token_logits: torch.Tensor = logits[:, -1, :]  # 取最后一个时刻的输出，(beam_size, 1, vocab_size)
+        # 累加lprob_total的时候，注意lprob_total此时shape = （beam_size,），shape转成（beam_size, 1）才可以与next_token_logits相加
+        lprob_total = next_token_logits + lprob_total.unsqueeze(dim=-1)  # 累加lprob_total，shape=(beam_size, vocab_size)
         if step == 1:
             # 因为最开始解码的时候只有一个结点<bos>,所以只需要取其中一个结点计算topk
-            topk_lprob_sum, top_k_words = lprob_sum[0].topk(  # 累积分数的topk
-                beam_size, dim=0, largest=True, sorted=True
-            )
+            topk_lprob_total, top_k_words = lprob_total[0].topk(beam_size, dim=0, largest=True, sorted=True)  # 累积分数的topk
         else:
-            # 此时要先展开再计算topk，如上图所示。
-            # topk_lprob_sum: (beam_size,) top_k_words: (beam_size,)  # 累积分数
-            topk_lprob_sum, top_k_words = lprob_sum.view(-1).topk(
-                beam_size, 0
-            )  # 累积分数的topk
+            # topk_lprob_total: (beam_size,) top_k_words: (beam_size,)  # 累积分数
+            topk_lprob_total, top_k_words = lprob_total.view(-1).topk(beam_size, 0)  # 累积分数的topk
         beam_id = top_k_words // vocab_size  # (beam_size)
         token_id = top_k_words % vocab_size  # (beam_size)
 
-        # 更新生成的句子seqs，注意要reorder再拼接
-        seqs = torch.cat(
-            [seqs[beam_id], token_id.unsqueeze(1)], dim=1
-        )  # 2 (k, step) ==> (k, step+1)
+        # 更新生成的句子seqs，注意要先reorder再拼接
+        seqs = torch.cat([seqs[beam_id], token_id.unsqueeze(1)], dim=1)  #2 (k, step) ==> (k, step+1)
 
         # 当前输出的单词不是eos的有哪些(输出其在next_wod_idx中的位置, 实际是beam_id)
         incomplete_idx = [
             idx
             for idx, next_word in enumerate(token_id)
             if next_word != eos_token_idx
-            # if next_word < 300
         ]
         # 输出已经遇到eos的句子的beam id(即seqs中的句子索引)
         complete_idx = list(set(range(len(token_id))) - set(incomplete_idx))
-        lprob_sum = topk_lprob_sum[beam_id]  # 3 对累积分数进行reorder，最后shape=(beam_size,)
+        lprob_total = topk_lprob_total[beam_id]  #3 对累积分数进行reorder，最后shape=(beam_size,)
 
         if len(complete_idx) > 0:
             complete_seqs.extend(seqs[complete_idx].tolist())  # 加入句子
-            complete_seqs_scores.extend(
-                lprob_sum[complete_idx]  # 累积分数
-            )  # 加入句子对应的累加log_prob
-        # 减掉已经完成的句子的数量，更新beam_size, 下次就不用执行那么多topk了，因为若干句子已经被解码出来了
+            complete_seqs_scores.extend(lprob_total[complete_idx])  # 加入句子对应的累加log_prob
+        # 更新beam_size, 下次就不用执行那么多topk了，因为若干句子已经被解码出来了
         beam_size -= len(complete_idx)
 
-        if beam_size == 0:  # 完成
-            break
+        if beam_size == 0:
+            break  # 完成
 
         # 更新下一次迭代数据, 仅专注于那些还没完成的句子，主要是完成重排序（reorder）
         # 有些代码地方使用torch.index_select(dim=,index=)进行reorder
-        seqs = seqs[
-            incomplete_idx
-        ]  # 这里没有reorder，是因为#2那里已经完成了reorder，#2 那里是reorder再拼接最新一步生成的token
+        seqs = seqs[incomplete_idx]  # 这里没有reorder，是因为#2那里已经完成了seqs的reorder
         hidden = hidden[beam_id[incomplete_idx]]  # hidden进行reorder
-        prev_words = token_id[incomplete_idx].unsqueeze(1)  # (s, 1) s < beam_size
-        lprob_sum = lprob_sum[
-            incomplete_idx
-        ]  # 这也也不需要reorder， #3那里reorder了，最后lprob_sum.shape=(beam_size,)
+        prev_words = token_id[incomplete_idx].unsqueeze(1)  # (s, 1)，其中 s < beam_size
+        lprob_total = lprob_total[incomplete_idx]  # 这也也不需要reorder， #3那里reorder了，lprob_total.shape=(beam_size,)
 
         if step > max_length:  # decode太长后，直接break掉
             break

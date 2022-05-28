@@ -1,7 +1,7 @@
 from celery import xmap
 import torch
 from torch import nn, Tensor
-
+from code_ML_or_DL.multi_head_attention import MultiHeadAttention
 # 考察pytorch常用的组件的位置，形式服从：from torch.* imort *， 比如：from torch import nn,或者import torch.* as *
 from torch.utils.data import DataLoader  # DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP  # ddp
@@ -66,6 +66,32 @@ def attention_mask(
     mask = torch.triu(input=mask, diagonal=1)  # 我们希望对角线及对角线以下（包括对角线）的部分全部置0，所以diagonal = 1
     return mask
 
+
+class AttentionPooling(nn.Module):
+    # 来源于CLIP的AttentionPool2d，用这个pooling方式取代了global average pooling
+    def __init__(
+        self, spacial_dim: int = 7, embed_size: int = 512, num_heads: int = 8
+    ):
+        super().__init__()
+        self.positional_embedding = nn.Parameter(
+            torch.randn(spacial_dim ** 2 + 1, embed_size) / embed_size ** 0.5
+        )  # 保证std=embedding_dim ** -0.5，这样相当于方差=1/embed_size
+        self.mha = MultiHeadAttention(
+            embed_size=embed_size, n_heads=num_heads
+        )  # mha就是一个multi-head-attention
+
+    def forward(self, x: torch.Tensor):
+        x = x.reshape(x.shape[0], x.shape[1], x.shape[2] * x.shape[3]).permute(
+            2, 0, 1
+        )  # (N,C,H,W) -> (H*W,N,C)
+        cls_emb = x.mean(
+            dim=0, keepdim=True
+        )  # (1, N, C)，注意这里keepdim=True，为了方面下一行进行cat操作
+        x = torch.cat([cls_emb, x], dim=0)  # (1+H*W,N,C)
+        x = x + self.positional_embedding[:, None, :].to(x.dtype)  # (H*W+1,N,C)
+        x = self.mha(query=x, key=x, value=x)  # (1+HW, N, C)，这里输入的qk和v都是x
+
+        return x[0]  # 取cls_emb，最后的shape为（N, C）
 
 if __name__ == "__main__":
     # demo：
