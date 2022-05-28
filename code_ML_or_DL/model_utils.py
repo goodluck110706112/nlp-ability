@@ -1,7 +1,8 @@
 from celery import xmap
 import torch
 from torch import nn, Tensor
-from code_ML_or_DL.multi_head_attention import MultiHeadAttention
+from multi_head_attention import MultiHeadAttention
+
 # 考察pytorch常用的组件的位置，形式服从：from torch.* imort *， 比如：from torch import nn,或者import torch.* as *
 from torch.utils.data import DataLoader  # DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP  # ddp
@@ -63,8 +64,19 @@ def attention_mask(
     #         [0., 0., 0., -inf],
     #         [0., 0., 0., 0.]])
     mask = (torch.zeros([length, length])).float().fill_(float("-inf"))
-    mask = torch.triu(input=mask, diagonal=1)  # 我们希望对角线及对角线以下（包括对角线）的部分全部置0，所以diagonal = 1
+    mask = torch.triu(
+        input=mask, diagonal=1
+    )  # 我们希望对角线及对角线以下（包括对角线）的部分全部置0，所以diagonal = 1
     return mask
+
+
+# l1_penalty 和l2_penalty
+def l1_penalty(w: torch.Tensor):
+    return torch.sum(w.abs())
+
+
+def l2_penalty(w: torch.Tensor):
+    return torch.sum(w**2) / 2
 
 
 class AttentionPooling(nn.Module):
@@ -93,6 +105,7 @@ class AttentionPooling(nn.Module):
 
         return x[0]  # 取cls_emb，最后的shape为（N, C）
 
+
 if __name__ == "__main__":
     # demo：
 
@@ -109,3 +122,8 @@ if __name__ == "__main__":
 
     # attention_mask
     print(attention_mask(length=4))
+
+    # # l1_penalty 和l2_penalty
+    x = torch.tensor([-1, -2]).float()
+    print(l1_penalty(x))
+    print(l2_penalty(x))
